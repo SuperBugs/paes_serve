@@ -15,101 +15,78 @@ namespace paems.Crontab
     public class SyncData : Job
     {
         // 10分钟轮
-/*        [Invoke(Begin = "2020-10-28 00:05", Interval = 1000 * 60 * 10)]
+        /*        [Invoke(Begin = "2020-10-28 00:05", Interval = 1000 * 60 * 10)]
+                public void Hour(IServiceProvider service)
+                {
+                    try
+                    {
+                        // 同步Redis用户缓存数据
+                        RedisClient.redisClient.SyncUserTable();
+                    }
+                    catch (Exception e)
+                    {
+                        CommonUtils.Nlog().Error(e, "定时同步用户信息Redis缓存失败");
+                    }
+                }*/
+        // 10分钟轮
+        [Invoke(Begin = "2021-12-2 00:00", Interval = 1000 * 60 * 60)]
         public void Hour(IServiceProvider service)
         {
             try
             {
-                // 同步Redis用户缓存数据
-                RedisClient.redisClient.SyncUserTable();
-            }
-            catch (Exception e)
-            {
-                CommonUtils.Nlog().Error(e, "定时同步用户信息Redis缓存失败");
-            }
-        }*/
-
-        // 天轮
-        [Invoke(Begin = "2020-10-28 00:30", Interval = 1000 * 60 * 60 * 24)]
-        public void Day(IServiceProvider service)
-        {
-            string sql;
-            SqlParameter[] param;
-            try
-            {
-                DateTime dateTime = DateTime.Now.Date.AddDays(1 - DateTime.Now.Day);
-                sql = "select * from init_config";
+                 /*非chamber
+                 忙碌->空闲，订单status为running且结束时间小于当前时间，则设置status为over，
+                 设备状态设置为空闲，开始时间和结束时间设置为空，status设置为free
+                 预约中->忙碌，订单status为waitting且开始时间+10分钟大于当前时间，则设置status为running
+                 设备状态设置为忙碌，设备开始/结束时间设置为订单开始/结束时间，status设置为running
+                 */
+                string sql;
+                SqlParameter[] param;
+                DateTime dateTime = DateTime.Now;
+                sql = "select * from UnChamberOrder status='running' or status='waitting'";
                 param = new SqlParameter[] {
                 };
+                List<decimal> orderToOver = new List<decimal>();
+                List<decimal> orderToRunning = new List<decimal>();
+                List<decimal> machineToFree = new List<decimal>();
+                List<decimal> machineToRuning = new List<decimal>();
                 var DataSource = SqlHelper.GetTableText(sql, param);
-                Config[] results = new Config[DataSource[0].Rows.Count];
-                int i = 0;
+                List<KeyValuePair<string, SqlParameter[]>> sqlStrList = new List<KeyValuePair<string, SqlParameter[]>>();
+                string updateSql;
                 foreach (DataTable table in DataSource)
                 {
                     foreach (DataRow row in table.Rows)
                     {
-                        Config result = new Config();
-                        result.id = Convert.ToDecimal(row["id"]);
-                        result.name = Convert.ToString(row["name"]);
-                        result.link = Convert.ToString(row["link"]);
-                        result.start_time = Convert.ToDateTime(row["start_time"]);
-                        result.cycle_time = Convert.ToDecimal(row["cycle_time"]);
-                        results[i] = result;
-                        i++;
+                        if (Convert.ToString(row["status"]).Equals("running")&&
+                            Convert.ToDateTime(row["end_time"])<dateTime)
+                        {
+                            
+                            updateSql = "UPDATE UnChamberOrder SET status='over' WHERE id=" + Convert.ToDecimal(row["id"]) + ";";
+                            sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] { }));
+
+                            updateSql = "UPDATE UnChamber SET status='free',start_time=null,end_time=null WHERE id=" + Convert.ToDecimal(row["machine_id"]) + ";";
+                            sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] { }));
+                        }
+                        if (Convert.ToString(row["status"]).Equals("waitting") &&
+                            Convert.ToDateTime(row["start_time"]).AddMinutes(10) > dateTime)
+                        {
+                            
+                            updateSql = "UPDATE UnChamber SET status='running' WHERE id=" + Convert.ToDecimal(row["id"]) + ";";
+                            sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] { }));
+
+                            updateSql = "UPDATE UnChamberOrder SET status='running',start_time="+ Convert.ToString(row["start_time"]) +",end_time="+
+                                Convert.ToString(row["start_time"]) +" WHERE id=" + Convert.ToDecimal(row["machine_id"]) + ";";
+                            sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] { }));
+                        }
                     }
                 }
-                /*// 计算排序
-                var num = results.Select(x => x.num).ToList().Distinct().ToList();
-                DateTime time = DateTime.Now.Date.AddDays(1 - DateTime.Now.Day);
-                sql = "DELETE FROM MONTH_RANK WHERE time >= @time";
-                param = new SqlParameter[] {
-                    new SqlParameter("@time",time),
-                };
-                if (SqlHelper.ExecteNonQueryText(sql, param) < 0)
-                {
-                    CommonUtils.Nlog().Error("定时同步计算排行榜失败,删除历史数据失败");
-                }
 
-                Dictionary<string, int> moBom = new Dictionary<string, int>();
-                for (int h = 0; h < num.Count; h++)
-                {
-                    moBom.Add(num[h], 0);
-                }
-                foreach (POINTS_RECORD p in results)
-                {
-                    moBom[p.num] = moBom[p.num] + p.value;
-                }
-                var data = moBom.Values.ToList();
-                data.Sort();
-                DataTable dt = new DataTable();
-                dt.Columns.Add("id", typeof(int));
-                dt.Columns.Add("num", typeof(string));
-                dt.Columns.Add("count", typeof(int));
-                dt.Columns.Add("time", typeof(DateTime));
-
-                Stopwatch sw = new Stopwatch();
-                sw.Start();
-
-                for (int x = 0; x < moBom.Count; x++)
-                {
-                    DataRow dr = dt.NewRow();
-                    dr["num"] = num[x];
-                    dr["count"] = moBom[num[x]];
-                    dr["time"] = DateTime.Now;
-                    dt.Rows.Add(dr);
-                }
-
-                if (!SqlHelper.BulkExcute(dt, "MONTH_RANK"))
-                {
-                    CommonUtils.Nlog().Error("定时同步计算排行榜失败");
-                }
-                */
+                SqlHelper.ExecuteSqlTran(sqlStrList);
             }
             catch (Exception e)
             {
-                CommonUtils.Nlog().Error(e, "定时同步计算排行榜失败");
+                CommonUtils.Nlog().Error(e, "更新设备状态失败");
             }
-            return;
         }
 
     }
