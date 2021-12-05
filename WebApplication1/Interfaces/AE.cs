@@ -41,6 +41,66 @@ namespace paems.Interfaces
         public string return_staff { get; set; }
     }
 
+    public class ChamberSearchReq
+    {
+        public string token { get; set; }
+        public decimal pageSize { get; set; }
+        public decimal currentPage { get; set; }
+        public string test_count { get; set; }
+        public string test_project { get; set; }
+        public string[] filters { get; set; }
+        public string[] date { get; set; }
+    }
+
+    public class ChamberSearchRes
+    {
+        public string success { get; set; }
+        public ChamberSearchData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class ChamberSearchData
+    {
+        public ChamberSearchResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class ChamberSearchResult
+    {
+        public string num { get; set; }
+        public decimal id { get; set; }
+        public string name { get; set; }
+        public string lab { get; set; }
+        public string status { get; set; }
+        public string remain_count { get; set; }
+        public string use_count { get; set; }
+        public string lend_time { get; set; }
+        public string return_time { get; set; }
+        public string return_staffs { get; set; }
+    }
+
+    public class UnChamberAEReq
+    {
+        public string token { get; set; }
+        public decimal id { get; set; }
+        public decimal test_count { get; set; }
+        public string customer { get; set; }
+        public string test_type { get; set; }
+        public string test_stage { get; set; }
+        public string test_program { get; set; }
+        public string test_target { get; set; }
+        public string lend_time { get; set; }
+        public string return_time { get; set; }
+    }
+
+    public class UnChamberAERes
+    {
+        public string success { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
     public class UnChamberScheduleReq
     {
         public string token { get; set; }
@@ -120,57 +180,10 @@ namespace paems.Interfaces
 
     }
 
-    public class UnChamberQueryCustomerReq
-    {
-        public string token { get; set; }
-    }
-    public class UnChamberQueryCustomerRes
-    {
-        public string success { get; set; }
-        public UnChamberQueryCustomerData data { get; set; }
-        public string errorMessage { get; set; }
-
-    }
-
-    public class UnChamberQueryCustomerData
-    {
-        public UnChamberQueryCustomerResult[] result { get; set; }
-        public decimal total { get; set; }
-
-    }
-    public class UnChamberQueryCustomerResult
-    {
-        public string name { get; set; }
-
-    }
-
-    public class UnChamberQueryMachineTypeNameReq
-    {
-        public string token { get; set; }
-    }
-    public class UnChamberQueryMachineTypeNameRes
-    {
-        public string success { get; set; }
-        public UnChamberQueryMachineTypeNameData data { get; set; }
-        public string errorMessage { get; set; }
-
-    }
-
-    public class UnChamberQueryMachineTypeNameData
-    {
-        public UnChamberQueryMachineTypeNameResult[] result { get; set; }
-        public decimal total { get; set; }
-
-    }
-    public class UnChamberQueryMachineTypeNameResult
-    {
-        public string name { get; set; }
-
-    }
-
     public class UnChamberQueryProjectNameReq
     {
         public string token { get; set; }
+        public string query { get; set; }
     }
     public class UnChamberQueryProjectNameRes
     {
@@ -183,10 +196,49 @@ namespace paems.Interfaces
     public class UnChamberQueryProjectNameData
     {
         public UnChamberQueryProjectNameResult[] result { get; set; }
+        public UnChamberQueryCustomerResult[] customer { get; set; }
+        public UnChamberQueryMachineTypeResult[] machine { get; set; }
         public decimal total { get; set; }
 
     }
     public class UnChamberQueryProjectNameResult
+    {
+        public string name { get; set; }
+
+    }
+    public class UnChamberQueryCustomerResult
+    {
+        public string value { get; set; }
+        public string label { get; set; }
+
+    }
+    public class UnChamberQueryMachineTypeResult
+    {
+        public string label { get; set; }
+        public string value { get; set; }
+
+    }
+
+    public class ChamberQueryProjectNameReq
+    {
+        public string token { get; set; }
+        public string query { get; set; }
+    }
+    public class ChamberQueryProjectNameRes
+    {
+        public string success { get; set; }
+        public ChamberQueryProjectNameData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class ChamberQueryProjectNameData
+    {
+        public ChamberQueryProjectNameResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class ChamberQueryProjectNameResult
     {
         public string name { get; set; }
 

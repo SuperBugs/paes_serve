@@ -119,7 +119,6 @@ namespace paems.Controllers
                     foreach (DataRow row in table.Rows)
                     {
                         res.name = Convert.ToString(row["name"]);
-                        res.machine = Convert.ToString(row["machine"]);
                         res.email = Convert.ToString(row["email"]);
                         res.userid = Convert.ToString(row["num"]);
                         if (Convert.ToString(row["role"]).Equals("User"))
