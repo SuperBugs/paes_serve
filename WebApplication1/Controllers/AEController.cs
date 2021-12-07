@@ -149,11 +149,13 @@ namespace paems.Controllers
                     new SqlParameter("@test_item",req.test_project),
                 };
                 var machine_type = "";
+                double run_time = 0.00;
                 foreach (DataTable table in SqlHelper.GetTableText(sql, param))
                 {
                     foreach (DataRow row in table.Rows)
                     {
                         machine_type = Convert.ToString(row["machine_type"]);
+                        run_time = Convert.ToDouble(row["test_time"]);
                     }
                 }
                 sql = "SELECT TOP(@pageSize) * FROM Chamber WHERE type=@machine_type " +
@@ -174,70 +176,161 @@ namespace paems.Controllers
                 {
                     foreach (DataRow row in table.Rows)
                     {
+
                         ChamberSearchResult result = new ChamberSearchResult();
                         result.id = Convert.ToDecimal(row["id"]);
                         result.name = Convert.ToString(row["name"]);
                         result.num = Convert.ToString(row["num"]);
-                        result.lend_time = Convert.ToString(row["start_time"]);
-                        result.return_time = Convert.ToString(row["end_time"]);
+
                         result.lab = Convert.ToString(row["lab"]);
                         result.return_staffs = Convert.ToString(row["return_staffs"]);
-                        // 模拟4组测试数据
-                        if (i == 0)
+                        result.status = "error";
+                        if (Convert.ToString(row["status"]).Equals("error"))
                         {
-                            result.status = "free";
                             result.use_count = "0";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) -
-                            Convert.ToDecimal(result.use_count));
-                            results[i] = result;
-                            i++;
+                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
+                            if (req.filters.Contains("维修") && result.status.Equals("error"))
+                            {
+                                results[i] = result;
+                                i++;
+                            }
                             continue;
                         }
-                        if (i == 1)
+                        // 获取该设备所有未结束订单
+                        sql = "SELECT * FROM ChamberOrder WHERE status!='over' AND machine_id=@machine_id";
+                        param = new SqlParameter[] {
+                            new SqlParameter("@machine_id", Convert.ToString(row["machine_id"])),
+                            new SqlParameter("@start_time", req.date[0]),
+                        };
+                        // 判断状态result.status free\waitting\running\full
+                        // 拼测情况
+                        var orders = SqlHelper.GetTableText(sql, param);
+                        var runningOrderId = new List<int>();
+                        var pingCeOrderId = new List<int>();
+                        var useCount = 0;
+                        var isYuYueConflit = false;
+                        var canPingDan = false;
+                        foreach (DataTable t in orders)
                         {
-                            result.status = "waitting";
-                            result.use_count = "4";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) -
-                            Convert.ToDecimal(result.use_count));
-                            results[i] = result;
-                            i++;
-                            continue;
+                            foreach (DataRow r in t.Rows)
+                            {
+                                var start_time = Convert.ToDateTime(req.date[0]);
+                                var end_time = Convert.ToDateTime(req.date[1]);
+                                var order_start = Convert.ToDateTime(r["start_time"]);
+                                var order_end = Convert.ToDateTime(r["end_time"]);
+                                if (Convert.ToString(r["status"]).Equals("waitting"))
+                                {
+
+                                    // 4种情况可以拼单
+                                    if ((end_time >= order_start && end_time <= order_end) && (start_time <= order_start))
+                                    {
+                                        canPingDan = true;
+                                    }
+                                    if ((start_time >= order_start && start_time <= order_end) && (end_time >= order_start && end_time <= order_end))
+                                    {
+                                        canPingDan = true;
+                                    }
+                                    if ((start_time >= order_start && start_time <= order_end) && (end_time >= order_end))
+                                    {
+                                        canPingDan = true;
+                                    }
+                                    if ((order_start >= start_time && order_start <= end_time) && (end_time >= order_start && end_time <= order_end))
+                                    {
+                                        canPingDan = true;
+                                    }
+
+                                    if (canPingDan)
+                                    {
+                                        pingCeOrderId.Add(Convert.ToInt32(r["id"]));
+                                        useCount = useCount + Convert.ToInt32(r["test_count"]);
+                                        result.lend_time = Convert.ToString(order_start);
+                                        result.return_time = Convert.ToString(order_end);
+                                        continue;
+                                    }
+
+                                    if (!(order_end <= start_time.AddHours(0 - run_time) || order_start >= end_time.AddHours(run_time)))
+                                    {
+                                        // 不可预约,有缓冲冲突
+                                        isYuYueConflit = true;
+                                    }
+                                }
+                                if (Convert.ToString(r["status"]).Equals("running"))
+                                {
+                                    if ((start_time >= Convert.ToDateTime(r["start_time"]).AddHours(0 - run_time) &&
+                                   start_time <= Convert.ToDateTime(r["end_time"])) ||
+                                   (end_time >= Convert.ToDateTime(r["start_time"]).AddHours(0 - run_time) &&
+                                   end_time <= Convert.ToDateTime(r["end_time"])))
+                                    {
+                                        runningOrderId.Add(Convert.ToInt32(r["id"]));
+                                        useCount = useCount + Convert.ToInt32(r["test_count"]);
+                                        result.lend_time = Convert.ToString(r["start_time"]);
+                                        result.return_time = Convert.ToString(r["end_time"]);
+                                        continue;
+                                    }
+
+                                }
+
+                            }
                         }
-                        if (i == 2)
+                        // 忙碌容量不满足
+                        if (pingCeOrderId.Count > 0 && useCount + Convert.ToInt32(req.test_count) > Convert.ToInt32(row["capacity"]))
                         {
-                            result.status = "error";
-                            result.use_count = "0";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) -
-                            Convert.ToDecimal(result.use_count));
-                            results[i] = result;
-                            i++;
+                            result.status = "full";
+                            result.use_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
+                            result.remain_count = result.use_count;
+                            if (req.filters.Contains("忙碌"))
+                            {
+                                results[i] = result;
+                                i++;
+                            }
                             continue;
                         }
-                        if (i == 3)
+                        // 忙碌有订单在running
+                        if (runningOrderId.Count > 0)
                         {
                             result.status = "running";
-                            result.use_count = "10";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) -
-                            Convert.ToDecimal(result.use_count));
-                            results[i] = result;
-                            i++;
+                            result.use_count = useCount + "";
+                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
+                            if (req.filters.Contains("忙碌"))
+                            {
+                                results[i] = result;
+                                i++;
+                            }
                             continue;
                         }
 
-
-                        // 如果开始时间和结束时间为空则为空闲状态，否则为忙碌（已经开始或者剩余为0）或者待测、空闲
-
-                        result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) -
-                        Convert.ToDecimal(result.use_count));
-
-
-                        // 确定所选时间内的设备状态 free或者running去订单表查询状态
-                        result.status = "error";
-                        if (!Convert.ToString(row["status"]).Equals("error"))
+                        // 拼测 容量满足
+                        if (pingCeOrderId.Count > 0 && useCount + Convert.ToInt32(req.test_count) < Convert.ToInt32(row["capacity"]))
                         {
-                            result.status = getScaleStatus(Convert.ToDecimal(row["id"]), req.date[0], req.date[1]);
+                            result.status = "free";
+                            result.use_count = useCount + "";
+                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
+                            if (req.filters.Contains("待测"))
+                            {
+                                results[i] = result;
+                                i++;
+                            }
+                            continue;
                         }
 
+                        // 可预约 wu ping dan tiao jian qie mei you qianzaichongtu qie mei you yunxingzhongdingdan
+                        if (canPingDan == false && isYuYueConflit == false && runningOrderId.Count == 0)
+                        {
+
+                            result.lend_time = "";
+                            result.return_time = "";
+                            result.status = "free";
+                            result.use_count = useCount + "";
+                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
+                            if (req.filters.Contains("空闲"))
+                            {
+                                results[i] = result;
+                                i++;
+                            }
+                            continue;
+                        }
+
+                        // 
                         if (req.filters.Contains("忙碌") && result.status.Equals("running"))
                         {
                             results[i] = result;
