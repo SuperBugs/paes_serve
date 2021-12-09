@@ -58,15 +58,11 @@ namespace paems.Controllers
                     sqlFilter = sqlFilter + " AND name=@deviceName ";
                 }
 
-                sql = "SELECT TOP(@pageSize) * FROM UnChamber WHERE 1=1 " + sqlFilter +
-                    " AND id NOT IN" +
-                    "(SELECT TOP(@beforeSize) id FROM UnChamber WHERE 1=1 " + sqlFilter +
-                    " ORDER BY id) ORDER BY id";
-
+                sql = "SELECT * FROM UnChamber WHERE 1=1 " + sqlFilter;
                 var DataSource = SqlHelper.GetTableText(sql, param);
-                // CommonUtils.printDataTableCollection(DataSource);
                 res.data = new UnChamberSearchData();
-                UnChamberSearchResult[] results = new UnChamberSearchResult[DataSource[0].Rows.Count];
+                List<UnChamberSearchResult> data = new List<UnChamberSearchResult>();
+
                 int i = 0;
                 foreach (DataTable table in DataSource)
                 {
@@ -83,42 +79,57 @@ namespace paems.Controllers
                         result.lab = Convert.ToString(row["lab"]);
                         result.return_staff = Convert.ToString(row["return_staff"]);
                         // 确定所选时间内的设备状态 free或者running去订单表查询状态
-                        result.status = "error";
+                        result.status = "error"; ;
                         if (!Convert.ToString(row["status"]).Equals("error"))
                         {
                             result.status = getScaleStatus(Convert.ToDecimal(row["id"]), req.date[0], req.date[1]);
                         }
-
-                        if (req.filters.Contains("忙碌") && result.status.Equals("running"))
+                        if (req.filters.Length == 3 && req.filters[0].Equals("") &&
+                            req.filters[1].Equals("") && req.filters[2].Equals("") || req.filters[0].Equals("all"))
                         {
-                            results[i] = result;
+                            data.Add(result);
                             i++;
                             continue;
                         }
-                        if (req.filters.Contains("空闲") && result.status.Equals("free"))
+                        if (req.filters.Contains("running") && result.status.Equals("running"))
                         {
-                            results[i] = result;
+                            data.Add(result);
                             i++;
                             continue;
                         }
-                        if (req.filters.Contains("维修") && result.status.Equals("error"))
+                        if (req.filters.Contains("free") && result.status.Equals("free"))
                         {
-                            results[i] = result;
+                            data.Add(result);
                             i++;
                             continue;
                         }
-                        results[i] = result;
-                        i++;
-                        continue;
+                        if (req.filters.Contains("error") && result.status.Equals("error"))
+                        {
+                            data.Add(result);
+                            i++;
+                            continue;
+                        }
                     }
                 }
-                sql = "SELECT COUNT(id) FROM UnChamber WHERE 1=1 " + sqlFilter;
-                param = new SqlParameter[] {
-                    new SqlParameter("@lab", req.lab),
-                    new SqlParameter("@deviceName", req.deviceName),
-                };
+                int start = 0;
+                req.currentPage--;
+
+                decimal count = 0;
+                if (data.Count - req.pageSize * req.currentPage >= req.pageSize)
+                {
+                    count = req.pageSize;
+                }
+                else
+                {
+                    count = data.Count - req.pageSize * req.currentPage;
+                }
+                UnChamberSearchResult[] results = new UnChamberSearchResult[Convert.ToInt32(count)];
+                for (decimal size = req.pageSize * req.currentPage; start < count; start++)
+                {
+                    results[start] = data[Convert.ToInt32(size + start)];
+                }
                 res.data.result = results;
-                res.data.total = Convert.ToDecimal(SqlHelper.ExecuteScalar(CommandType.Text, sql, param));
+                res.data.total = data.Count();
                 res.success = "true";
             }
             catch (Exception e)
@@ -128,6 +139,29 @@ namespace paems.Controllers
             }
             return res;
         }
+
+        private string getScaleStatus(decimal machine_id, string start_time, string end_time)
+        {
+            string sql = "SELECT COUNT(id) FROM UnChamberOrder WHERE status!='over' AND machine_id=@machine_id AND " +
+                "((start_time<@start_time AND end_time>@start_time) " +
+                "OR (start_time<@end_time AND end_time>@end_time) " +
+                "OR (start_time>@start_time AND end_time<@end_time))";
+            SqlParameter[] param = new SqlParameter[] {
+                    new SqlParameter("@machine_id", machine_id),
+                    new SqlParameter("@start_time", start_time),
+                    new SqlParameter("@end_time", end_time),
+            };
+            if (Convert.ToDecimal(SqlHelper.ExecuteScalar(CommandType.Text, sql, param)) > 0)
+            {
+                return "running";
+            }
+            else
+            {
+                return "free";
+            }
+
+        }
+        // chamber设备暂时不提供过滤功能，指定类型的Chamber类型较少
         [HttpPost]
         [Route("api/ae/chamber/search")]
         public ChamberSearchRes Post([FromBody] ChamberSearchReq req)
@@ -144,7 +178,7 @@ namespace paems.Controllers
                 }
                 string sql;
                 SqlParameter[] param;
-                sql = "SELECT machine_type FROM ChamberTestItem WHERE test_item=@test_item";
+                sql = "SELECT * FROM ChamberTestItem WHERE test_item=@test_item";
                 param = new SqlParameter[] {
                     new SqlParameter("@test_item",req.test_project),
                 };
@@ -176,36 +210,96 @@ namespace paems.Controllers
                 {
                     foreach (DataRow row in table.Rows)
                     {
-
                         ChamberSearchResult result = new ChamberSearchResult();
                         result.id = Convert.ToDecimal(row["id"]);
                         result.name = Convert.ToString(row["name"]);
                         result.num = Convert.ToString(row["num"]);
-
                         result.lab = Convert.ToString(row["lab"]);
                         result.return_staffs = Convert.ToString(row["return_staffs"]);
-                        result.status = "error";
+                        result.status = "free";
                         if (Convert.ToString(row["status"]).Equals("error"))
                         {
                             result.use_count = "0";
+                            result.status = "error";
                             result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
-                            if (req.filters.Contains("维修") && result.status.Equals("error"))
-                            {
-                                results[i] = result;
-                                i++;
-                            }
+                            results[i] = result;
+                            i++;
                             continue;
                         }
-                        // 获取该设备所有未结束订单
-                        sql = "SELECT * FROM ChamberOrder WHERE status!='over' AND machine_id=@machine_id";
+                        // 查询符合拼测的订单
+                        sql = "SELECT * FROM ChamberTimeOrder WHERE status='waitting' " +
+                            "AND machine_id=@machine_id " +
+                            "AND remain_count>=@test_count " +
+                            "AND ((@end_time > start_time AND @end_time < end_time)" +
+                            "OR (@start_time > start_time AND @start_time < end_time)" +
+                            "OR (@start_time < start_time AND @end_time > end_time))";
                         param = new SqlParameter[] {
-                            new SqlParameter("@machine_id", Convert.ToString(row["machine_id"])),
-                            new SqlParameter("@start_time", req.date[0]),
+                            new SqlParameter("@machine_id", Convert.ToString(row["id"])),
+                            new SqlParameter("@test_count", req.test_count),
+                            new SqlParameter("@end_time", req.date[0]),
+                            new SqlParameter("@start_time", req.date[1]),
                         };
-                        // 判断状态result.status free\waitting\running\full
-                        // 拼测情况
+                        var order = SqlHelper.GetTableText(sql, param);
+
+                        foreach (DataTable t in order)
+                        {
+                            foreach (DataRow r in t.Rows)
+                            {
+                                result.status = "waitting";
+                                result.lend_time = Convert.ToString(r["start_time"]);
+                                result.return_time = Convert.ToString(r["end_time"]);
+                                result.use_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - Convert.ToDecimal(r["remain_count"]));
+                                result.remain_count = Convert.ToDecimal(r["remain_count"]) + "";
+                                results[i] = result;
+                                i++;
+                                break;
+                            }
+                        }
+                        if (result.status.Equals("waitting"))
+                        {
+                            continue;
+                        }
+                        // 存在则为忙碌，不存在则为空闲
+                        sql = "SELECT * FROM ChamberTimeOrder WHERE status!='over' " +
+                            "AND machine_id=@machine_id " +
+                            "AND ((@end_time > start_time AND @end_time < end_time)" +
+                            "OR (@start_time > start_time AND @start_time < end_time)" +
+                            "OR (@start_time < start_time AND @end_time > end_time))";
+                        param = new SqlParameter[] {
+                            new SqlParameter("@machine_id", Convert.ToString(row["id"])),
+                            new SqlParameter("@end_time", Convert.ToDateTime(req.date[0]).AddHours(run_time)),
+                            new SqlParameter("@start_time", Convert.ToDateTime(req.date[1]).AddHours(run_time)),
+                        };
+
                         var orders = SqlHelper.GetTableText(sql, param);
-                        var runningOrderId = new List<int>();
+
+                        foreach (DataTable t in orders)
+                        {
+                            foreach (DataRow r in t.Rows)
+                            {
+                                result.status = "running";
+                                result.lend_time = Convert.ToString(r["start_time"]);
+                                result.return_time = Convert.ToString(r["end_time"]);
+                                result.use_count = Convert.ToDecimal(row["capacity"]) + "";
+                                result.remain_count = "0";
+                                results[i] = result;
+                                i++;
+                                break;
+                            }
+                        }
+                        if (result.status.Equals("free"))
+                        {
+                            result.lend_time = "";
+                            result.return_time = "";
+                            result.status = "free";
+                            result.use_count = "0";
+                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
+                            results[i] = result;
+                            i++;
+                        }
+
+                        #region
+                        /*var runningOrderId = new List<int>();
                         var pingCeOrderId = new List<int>();
                         var useCount = 0;
                         var isYuYueConflit = false;
@@ -267,23 +361,15 @@ namespace paems.Controllers
                                         result.return_time = Convert.ToString(r["end_time"]);
                                         continue;
                                     }
-
                                 }
-
                             }
                         }
                         // 忙碌容量不满足
                         if (pingCeOrderId.Count > 0 && useCount + Convert.ToInt32(req.test_count) > Convert.ToInt32(row["capacity"]))
                         {
-                            result.status = "full";
+                            result.status = "running";
                             result.use_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
                             result.remain_count = result.use_count;
-                            if (req.filters.Contains("忙碌"))
-                            {
-                                results[i] = result;
-                                i++;
-                            }
-                            continue;
                         }
                         // 忙碌有订单在running
                         if (runningOrderId.Count > 0)
@@ -291,79 +377,27 @@ namespace paems.Controllers
                             result.status = "running";
                             result.use_count = useCount + "";
                             result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
-                            if (req.filters.Contains("忙碌"))
-                            {
-                                results[i] = result;
-                                i++;
-                            }
-                            continue;
                         }
-
                         // 拼测 容量满足
                         if (pingCeOrderId.Count > 0 && useCount + Convert.ToInt32(req.test_count) < Convert.ToInt32(row["capacity"]))
                         {
-                            result.status = "free";
+                            result.status = "waitting";
                             result.use_count = useCount + "";
                             result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
-                            if (req.filters.Contains("待测"))
-                            {
-                                results[i] = result;
-                                i++;
-                            }
-                            continue;
                         }
-
-                        // 可预约 wu ping dan tiao jian qie mei you qianzaichongtu qie mei you yunxingzhongdingdan
+                        // 可预约，无拼单条件且没有潜在冲突并且没有运行中订单
                         if (canPingDan == false && isYuYueConflit == false && runningOrderId.Count == 0)
                         {
-
                             result.lend_time = "";
                             result.return_time = "";
                             result.status = "free";
-                            result.use_count = useCount + "";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
-                            if (req.filters.Contains("空闲"))
-                            {
-                                results[i] = result;
-                                i++;
-                            }
-                            continue;
-                        }
-
-                        // 
-                        if (req.filters.Contains("忙碌") && result.status.Equals("running"))
-                        {
-                            results[i] = result;
-                            i++;
-                            continue;
-                        }
-                        if (req.filters.Contains("忙碌") && result.status.Equals("full"))
-                        {
-                            results[i] = result;
-                            i++;
-                            continue;
-                        }
-                        if (req.filters.Contains("待测") && result.status.Equals("waitting"))
-                        {
-                            results[i] = result;
-                            i++;
-                            continue;
-                        }
-                        if (req.filters.Contains("空闲") && result.status.Equals("free"))
-                        {
-                            results[i] = result;
-                            i++;
-                            continue;
-                        }
-                        if (req.filters.Contains("维修") && result.status.Equals("error"))
-                        {
-                            results[i] = result;
-                            i++;
-                            continue;
+                            result.use_count = "0";
+                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
                         }
                         results[i] = result;
                         i++;
-                        continue;
+                        continue;*/
+                        #endregion
                     }
                 }
                 sql = "SELECT COUNT(id) FROM Chamber WHERE type=@machine_type";
@@ -372,36 +406,17 @@ namespace paems.Controllers
                 };
                 res.data.result = results;
                 res.data.total = Convert.ToDecimal(SqlHelper.ExecuteScalar(CommandType.Text, sql, param));
-                res.data.total = 4;
                 res.success = "true";
             }
             catch (Exception e)
             {
-                res.errorMessage = "UnChamber查询接口异常";
+                res.errorMessage = "Chamber查询接口异常";
                 _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
             }
             return res;
         }
-        private string getScaleStatus(decimal machine_id, string start_time, string end_time)
-        {
-            string sql = "SELECT COUNT(id) FROM UnChamberOrder WHERE status!='over' AND machine_id=@machine_id AND " +
-                "((start_time<@start_time AND end_time>@start_time) OR (start_time<@end_time AND end_time>@end_time))";
-            SqlParameter[] param = new SqlParameter[] {
-                    new SqlParameter("@machine_id", machine_id),
-                    new SqlParameter("@start_time", start_time),
-                    new SqlParameter("@end_time", end_time),
-            };
-            if (Convert.ToDecimal(SqlHelper.ExecuteScalar(CommandType.Text, sql, param)) > 0)
-            {
-                return "running";
-            }
-            else
-            {
-                return "free";
-            }
 
-        }
-
+        //非chamber设备预约
         [HttpPost]
         [Route("api/ae/unchamber")]
         public UnChamberAERes Post([FromBody] UnChamberAEReq req)
@@ -419,7 +434,8 @@ namespace paems.Controllers
                 string sql = "if not " +
                     "exists(SELECT * FROM UnChamberOrder WHERE status!='over' AND id=@machine_id AND " +
                     "((start_time<@start_time AND end_time>@start_time) " +
-                    "OR (start_time<@end_time AND end_time>@end_time)))" +
+                    "OR (start_time<@end_time AND end_time<@end_time) " +
+                    "OR (start_time>@start_time AND end_time<@end_time)))" +
                     " INSERT INTO UnChamberOrder " +
                     "(machine_id,staff_num,start_time,end_time,order_time,customer_type," +
                     "test_machine_type,test_stage,test_item,test_count,test_target,status)" +
@@ -452,6 +468,125 @@ namespace paems.Controllers
             catch (Exception e)
             {
                 res.errorMessage = "Unchamber设备预约接口异常";
+                _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
+            }
+            return res;
+        }
+
+        //chamber设备预约
+        [HttpPost]
+        [Route("api/ae/chamber")]
+        public ChamberAERes Post([FromBody] ChamberAEReq req)
+        {
+            ChamberAERes res = new ChamberAERes();
+            try
+            {
+                res.success = "false";
+                TokenCheckResult tokenCheckResult = TokenHelper.CheckToken(req.token);
+                if (!tokenCheckResult.isValid)
+                {
+                    res.errorMessage = "身份验证失败";
+                    return res;
+                }
+                string sql;
+                SqlParameter[] param;
+                sql = "SELECT * FROM ChamberTestItem WHERE test_item=@test_item";
+                param = new SqlParameter[] {
+                    new SqlParameter("@test_item",req.test_program),
+                };
+                double run_time = 0.00;
+                foreach (DataTable table in SqlHelper.GetTableText(sql, param))
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        run_time = Convert.ToDouble(row["test_time"]);
+                    }
+                }
+                param = new SqlParameter[] {
+                        new SqlParameter("@machine_id",req.id),
+                        new SqlParameter("@start_time",req.start_time),
+                        new SqlParameter("@end_time",req.end_time),
+                        new SqlParameter("@staff_num",tokenCheckResult.userNum),
+                        new SqlParameter("@order_time",DateTime.Now),
+                        new SqlParameter("@customer_type",req.customer),
+                        new SqlParameter("@test_machine_type",req.test_type),
+                        new SqlParameter("@test_stage",req.test_stage),
+                        new SqlParameter("@test_item",req.test_program),
+                        new SqlParameter("@test_count",req.test_count),
+                        new SqlParameter("@test_targert",req.test_target),
+                    };
+                //拼测
+                if (req.order_type.Equals("group"))
+                {
+                    sql = "set xact_abort on " +
+                        "begin tran " +
+                        "declare @CTOID int,@CTOS datetime,@CTOE datetime,@CTOStatus varchar(16),@StartTimeResult datetime,@EndTimeResult datetime" +
+                        "SELECT @CTOID=FIRST(id),@CTOS=FIRST(start_time),@CTOE=FIRST(end_time),@CTOStatus=FIRST(status) " +
+                        "FROM ChamberTimeOrder WHERE status='waitting' " +
+                            "AND machine_id=@machine_id " +
+                            "AND remain_count>=@test_count " +
+                            "AND ((@end_time>start_time AND @end_time<end_time) " +
+                            "OR (@start_time>start_time AND @start_time<end_time) " +
+                            "OR (@start_time<start_time AND @end_time>end_time)); " +
+                        "if (@CTOID not null) " +
+                            "begin " +
+                            "if(@start_time<@CTOS AND @end_time>@CTOS AND @end_time<@CTOE) " +
+                            "begin @StartTimeResult=@CTOS,@EndTimeResult=@start_time end " +
+                            "if(@start_time>@CTOS AND @end_time<@CTOE) " +
+                            "begin @StartTimeResult=@start_time,@EndTimeResult=@end_time end " +
+                            "if(@start_time>@CTOS AND @start_time<@CTOE AND @end_time>@CTOE)" +
+                            "begin @StartTimeResult=@start_time,@EndTimeResult=@CTOE end " +
+                            "if(@start_time<@CTOS AND @end_time<@CTOE AND @end_time>@CTOS)" +
+                            "begin @StartTimeResult=@CTOS,@EndTimeResult=@end_time end " +
+                            "if(@start_time<@CTOS AND @end_time>@CTOE)" +
+                            "begin @StartTimeResult=@CTOS,@EndTimeResult=@CTOE end " +
+                            "UPDATE ChamberTimeOrder SET start_time=@StartTimeResult,end_time=@EndTimeResult,remain_count=remain_count-@test_count WHERER id=@CTOID;" +
+                            "INSERT INTO ChamberOrder (machine_id,staff_num,start_time,end_time,order_time,customer_type," +
+                            "test_machine_type,test_stage,test_item,test_count,@test_targert,status,time_order_id) " +
+                            "VALUES (@machine_id,@staff_num,@StartTimeResult,@EndTimeResult,@order_time,@customer_type," +
+                            "@test_machine_type,@test_stage,@test_item,@test_count,@test_targert,@CTOStatus,@CTOID) " +
+                            "end" +
+                         "commit tarn";
+                    if (SqlHelper.ExecteNonQueryText(sql, param) != 2)
+                    {
+                        res.errorMessage = "设备忙碌";
+                    }
+                    res.success = "true";
+                }
+                // 预定
+                if (req.order_type.Equals("new"))
+                {
+                    sql = "set xact_abort on " +
+                        "begin tran " +
+                        "declare @CTOID int,@Capacity int,@TimeOrderId int" +
+                        "SELECT @CTOID=FIRST(id) " +
+                        "FROM ChamberTimeOrder WHERE status!='over' " +
+                            "AND machine_id=@machine_id " +
+                            "AND ((@end_time > start_time AND @end_time < end_time) " +
+                            "OR (@start_time > start_time AND @start_time < end_time) " +
+                            "OR (@start_time < start_time AND @end_time > end_time)); " +
+                        "SELECT @Capacity=FIRST(capacity) FROM Chamber WHERE id=@machine_id; " +
+                        "if (@CTOID is null) " +
+                            "INSERT INTO ChamberTimeOrder (start_time,end_time,machine_id,reamin_count,status) " +
+                            "VALUSE (@start_time,@end_time,@machine_id,@Capacity,'waitting');" +
+                            "SELECT @TimeOrderId=FIRST(id) FROM ChamberTimeOrder WHERE start_time=@start_time AND end_time=@end_time AND machine_id=@machine_id; " +
+                            "INSERT INTO ChamberOrder (machine_id,staff_num,start_time,end_time,order_time,customer_type," +
+                            "test_machine_type,test_stage,test_item,test_count,@test_targert,status,time_order_id) " +
+                            "VALUES (@machine_id,@staff_num,@StartTimeResult,@EndTimeResult,@order_time,@customer_type," +
+                            "@test_machine_type,@test_stage,@test_item,@test_count,@test_targert,'waitting',@TimeOrderId); " +
+                            "end" +
+                         "commit tarn";
+
+                    if (SqlHelper.ExecteNonQueryText(sql, param) != 2)
+                    {
+                        res.errorMessage = "设备忙碌";
+                    }
+                    res.success = "true";
+                }
+            }
+            catch (Exception e)
+            {
+                res.errorMessage = "Chamber设备预约接口异常";
                 _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
             }
             return res;
@@ -711,7 +846,7 @@ namespace paems.Controllers
             }
             return res;
         }
-        // 查询chamber类型设备的素有测试项目名称
+        // 查询chamber类型设备的有测试项目名称
         [HttpPost]
         [Route("api/ae/chamber/query_project")]
         public ChamberQueryProjectNameRes Post([FromBody] ChamberQueryProjectNameReq req)
@@ -749,6 +884,70 @@ namespace paems.Controllers
                 }
                 res.data.total = i;
                 res.data.result = results;
+                res.success = "true";
+            }
+            catch (Exception e)
+            {
+                res.errorMessage = "Chamber设备类型-测试项目表待维护";
+                _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
+            }
+            return res;
+        }
+
+        [HttpPost]
+        [Route("api/ae/chamber/query_ae")]
+        public ChamberQueryAERes Post([FromBody] ChamberQueryAEReq req)
+        {
+            ChamberQueryAERes res = new ChamberQueryAERes();
+            try
+            {
+                res.success = "false";
+                TokenCheckResult tokenCheckResult = TokenHelper.CheckToken(req.token);
+                if (!tokenCheckResult.isValid)
+                {
+                    res.errorMessage = "身份验证失败";
+                    return res;
+                }
+                string sql;
+                SqlParameter[] param;
+                res.data = new ChamberQueryAEData();
+                // 获取客户类型
+                sql = "SELECT DISTINCT type FROM CustomerType";
+                var customerData = SqlHelper.GetTableText(sql, new SqlParameter[] { });
+                ChamberQueryCustomerResult[] customer = new ChamberQueryCustomerResult[customerData[0].Rows.Count];
+                int a = 0;
+                foreach (DataTable table in customerData)
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        ChamberQueryCustomerResult result = new ChamberQueryCustomerResult();
+                        result.label = Convert.ToString(row["type"]);
+                        result.value = Convert.ToString(row["type"]);
+                        customer[a] = result;
+                        a++;
+                    }
+                }
+                res.data.customer = customer;
+                // 获取用户负责的机型
+                sql = "SELECT machine FROM UserMachine WHERE user_num=@id";
+                param = new SqlParameter[] {
+                    new SqlParameter("@id",tokenCheckResult.userNum),
+                };
+                var machineData = SqlHelper.GetTableText(sql, param);
+                ChamberQueryMachineTypeResult[] machine = new ChamberQueryMachineTypeResult[machineData[0].Rows.Count];
+                int b = 0;
+                foreach (DataTable table in machineData)
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        ChamberQueryMachineTypeResult result = new ChamberQueryMachineTypeResult();
+                        result.label = Convert.ToString(row["machine"]);
+                        result.value = Convert.ToString(row["machine"]);
+                        machine[b] = result;
+                        b++;
+                    }
+                }
+                res.data.machine = machine;
                 res.success = "true";
             }
             catch (Exception e)

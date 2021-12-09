@@ -46,7 +46,7 @@ namespace paems.Interfaces
         public string token { get; set; }
         public decimal pageSize { get; set; }
         public decimal currentPage { get; set; }
-        public string test_count { get; set; }
+        public decimal test_count { get; set; }
         public string test_project { get; set; }
         public string[] filters { get; set; }
         public string[] date { get; set; }
@@ -99,6 +99,26 @@ namespace paems.Interfaces
         public string success { get; set; }
         public string errorMessage { get; set; }
 
+    }
+    public class ChamberAEReq
+    {
+        public string token { get; set; }
+        public string order_type { get; set; }
+        public decimal id { get; set; }
+        public string start_time { get; set; }
+        public string end_time { get; set; }
+        public string customer { get; set; }
+        public decimal test_count { get; set; }
+        public string test_type { get; set; }
+        public string test_stage { get; set; }
+        public string test_program { get; set; }
+        public string test_target { get; set; }
+    }
+
+    public class ChamberAERes
+    {
+        public string success { get; set; }
+        public string errorMessage { get; set; }
     }
 
     public class UnChamberScheduleReq
@@ -241,6 +261,39 @@ namespace paems.Interfaces
     public class ChamberQueryProjectNameResult
     {
         public string name { get; set; }
+
+    }
+
+    public class ChamberQueryAEReq
+    {
+        public string token { get; set; }
+        public string query { get; set; }
+    }
+    public class ChamberQueryAERes
+    {
+        public string success { get; set; }
+        public ChamberQueryAEData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class ChamberQueryAEData
+    {
+        public ChamberQueryCustomerResult[] customer { get; set; }
+        public ChamberQueryMachineTypeResult[] machine { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class ChamberQueryCustomerResult
+    {
+        public string value { get; set; }
+        public string label { get; set; }
+
+    }
+    public class ChamberQueryMachineTypeResult
+    {
+        public string label { get; set; }
+        public string value { get; set; }
 
     }
 }
