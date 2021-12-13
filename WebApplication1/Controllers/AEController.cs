@@ -39,6 +39,11 @@ namespace paems.Controllers
                     res.errorMessage = "身份验证失败";
                     return res;
                 }
+                if (Convert.ToDateTime(req.date[0]).AddMinutes(10) < DateTime.Now)
+                {
+                    res.errorMessage = "开始时间小于当前时间";
+                    return res;
+                }
                 string sql;
                 string sqlFilter = "";
                 SqlParameter[] param;
@@ -159,7 +164,6 @@ namespace paems.Controllers
             {
                 return "free";
             }
-
         }
         // chamber设备暂时不提供过滤功能，指定类型的Chamber类型较少
         [HttpPost]
@@ -174,6 +178,11 @@ namespace paems.Controllers
                 if (!tokenCheckResult.isValid)
                 {
                     res.errorMessage = "身份验证失败";
+                    return res;
+                }
+                if (Convert.ToDateTime(req.date[0]).AddMinutes(10) < DateTime.Now)
+                {
+                    res.errorMessage = "开始时间小于当前时间";
                     return res;
                 }
                 string sql;
@@ -236,8 +245,8 @@ namespace paems.Controllers
                         param = new SqlParameter[] {
                             new SqlParameter("@machine_id", Convert.ToString(row["id"])),
                             new SqlParameter("@test_count", req.test_count),
-                            new SqlParameter("@end_time", req.date[0]),
-                            new SqlParameter("@start_time", req.date[1]),
+                            new SqlParameter("@start_time", req.date[0]),
+                            new SqlParameter("@end_time", req.date[1]),
                         };
                         var order = SqlHelper.GetTableText(sql, param);
 
@@ -267,7 +276,7 @@ namespace paems.Controllers
                             "OR (@start_time < start_time AND @end_time > end_time))";
                         param = new SqlParameter[] {
                             new SqlParameter("@machine_id", Convert.ToString(row["id"])),
-                            new SqlParameter("@end_time", Convert.ToDateTime(req.date[0]).AddHours(run_time)),
+                            new SqlParameter("@end_time", Convert.ToDateTime(req.date[0]).AddHours(0-run_time)),
                             new SqlParameter("@start_time", Convert.ToDateTime(req.date[1]).AddHours(run_time)),
                         };
 
@@ -280,14 +289,18 @@ namespace paems.Controllers
                                 result.status = "running";
                                 result.lend_time = Convert.ToString(r["start_time"]);
                                 result.return_time = Convert.ToString(r["end_time"]);
-                                result.use_count = Convert.ToDecimal(row["capacity"]) + "";
-                                result.remain_count = "0";
+                                result.use_count = Convert.ToDecimal(row["capacity"]) - Convert.ToDecimal(r["remain_count"]) + "";
+                                result.remain_count = Convert.ToDecimal(r["remain_count"]) + "";
                                 results[i] = result;
                                 i++;
                                 break;
                             }
                         }
-                        if (result.status.Equals("free"))
+                        if (result.status.Equals("running"))
+                        {
+                            continue;
+                        }
+                        if (result.status.Equals("free") && Convert.ToDecimal(row["capacity"]) >= req.test_count)
                         {
                             result.lend_time = "";
                             result.return_time = "";
@@ -297,107 +310,16 @@ namespace paems.Controllers
                             results[i] = result;
                             i++;
                         }
-
-                        #region
-                        /*var runningOrderId = new List<int>();
-                        var pingCeOrderId = new List<int>();
-                        var useCount = 0;
-                        var isYuYueConflit = false;
-                        var canPingDan = false;
-                        foreach (DataTable t in orders)
-                        {
-                            foreach (DataRow r in t.Rows)
-                            {
-                                var start_time = Convert.ToDateTime(req.date[0]);
-                                var end_time = Convert.ToDateTime(req.date[1]);
-                                var order_start = Convert.ToDateTime(r["start_time"]);
-                                var order_end = Convert.ToDateTime(r["end_time"]);
-                                if (Convert.ToString(r["status"]).Equals("waitting"))
-                                {
-
-                                    // 4种情况可以拼单
-                                    if ((end_time >= order_start && end_time <= order_end) && (start_time <= order_start))
-                                    {
-                                        canPingDan = true;
-                                    }
-                                    if ((start_time >= order_start && start_time <= order_end) && (end_time >= order_start && end_time <= order_end))
-                                    {
-                                        canPingDan = true;
-                                    }
-                                    if ((start_time >= order_start && start_time <= order_end) && (end_time >= order_end))
-                                    {
-                                        canPingDan = true;
-                                    }
-                                    if ((order_start >= start_time && order_start <= end_time) && (end_time >= order_start && end_time <= order_end))
-                                    {
-                                        canPingDan = true;
-                                    }
-
-                                    if (canPingDan)
-                                    {
-                                        pingCeOrderId.Add(Convert.ToInt32(r["id"]));
-                                        useCount = useCount + Convert.ToInt32(r["test_count"]);
-                                        result.lend_time = Convert.ToString(order_start);
-                                        result.return_time = Convert.ToString(order_end);
-                                        continue;
-                                    }
-
-                                    if (!(order_end <= start_time.AddHours(0 - run_time) || order_start >= end_time.AddHours(run_time)))
-                                    {
-                                        // 不可预约,有缓冲冲突
-                                        isYuYueConflit = true;
-                                    }
-                                }
-                                if (Convert.ToString(r["status"]).Equals("running"))
-                                {
-                                    if ((start_time >= Convert.ToDateTime(r["start_time"]).AddHours(0 - run_time) &&
-                                   start_time <= Convert.ToDateTime(r["end_time"])) ||
-                                   (end_time >= Convert.ToDateTime(r["start_time"]).AddHours(0 - run_time) &&
-                                   end_time <= Convert.ToDateTime(r["end_time"])))
-                                    {
-                                        runningOrderId.Add(Convert.ToInt32(r["id"]));
-                                        useCount = useCount + Convert.ToInt32(r["test_count"]);
-                                        result.lend_time = Convert.ToString(r["start_time"]);
-                                        result.return_time = Convert.ToString(r["end_time"]);
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                        // 忙碌容量不满足
-                        if (pingCeOrderId.Count > 0 && useCount + Convert.ToInt32(req.test_count) > Convert.ToInt32(row["capacity"]))
+                        else
                         {
                             result.status = "running";
-                            result.use_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
-                            result.remain_count = result.use_count;
-                        }
-                        // 忙碌有订单在running
-                        if (runningOrderId.Count > 0)
-                        {
-                            result.status = "running";
-                            result.use_count = useCount + "";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
-                        }
-                        // 拼测 容量满足
-                        if (pingCeOrderId.Count > 0 && useCount + Convert.ToInt32(req.test_count) < Convert.ToInt32(row["capacity"]))
-                        {
-                            result.status = "waitting";
-                            result.use_count = useCount + "";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - useCount);
-                        }
-                        // 可预约，无拼单条件且没有潜在冲突并且没有运行中订单
-                        if (canPingDan == false && isYuYueConflit == false && runningOrderId.Count == 0)
-                        {
                             result.lend_time = "";
                             result.return_time = "";
-                            result.status = "free";
                             result.use_count = "0";
-                            result.remain_count = Convert.ToString(Convert.ToDecimal(row["capacity"]));
+                            result.remain_count = "剩余容量不够";
+                            results[i] = result;
+                            i++;
                         }
-                        results[i] = result;
-                        i++;
-                        continue;*/
-                        #endregion
                     }
                 }
                 sql = "SELECT COUNT(id) FROM Chamber WHERE type=@machine_type";
@@ -429,6 +351,11 @@ namespace paems.Controllers
                 if (!tokenCheckResult.isValid)
                 {
                     res.errorMessage = "身份验证失败";
+                    return res;
+                }
+                if (Convert.ToDateTime(req.lend_time).AddMinutes(10) < DateTime.Now)
+                {
+                    res.errorMessage = "开始时间小于当前时间";
                     return res;
                 }
                 string sql = "if not " +
@@ -488,6 +415,11 @@ namespace paems.Controllers
                     res.errorMessage = "身份验证失败";
                     return res;
                 }
+                if (Convert.ToDateTime(req.start_time).AddMinutes(10) < DateTime.Now)
+                {
+                    res.errorMessage = "开始时间小于当前时间";
+                    return res;
+                }
                 string sql;
                 SqlParameter[] param;
                 sql = "SELECT * FROM ChamberTestItem WHERE test_item=@test_item";
@@ -502,10 +434,13 @@ namespace paems.Controllers
                         run_time = Convert.ToDouble(row["test_time"]);
                     }
                 }
-                param = new SqlParameter[] {
+                //拼测
+                if (req.order_type.Equals("group"))
+                {
+                    param = new SqlParameter[] {
                         new SqlParameter("@machine_id",req.id),
-                        new SqlParameter("@start_time",req.start_time),
-                        new SqlParameter("@end_time",req.end_time),
+                        new SqlParameter("@start_time",Convert.ToDateTime(req.start_time)),
+                        new SqlParameter("@end_time",Convert.ToDateTime(req.end_time)),
                         new SqlParameter("@staff_num",tokenCheckResult.userNum),
                         new SqlParameter("@order_time",DateTime.Now),
                         new SqlParameter("@customer_type",req.customer),
@@ -513,75 +448,44 @@ namespace paems.Controllers
                         new SqlParameter("@test_stage",req.test_stage),
                         new SqlParameter("@test_item",req.test_program),
                         new SqlParameter("@test_count",req.test_count),
-                        new SqlParameter("@test_targert",req.test_target),
+                        new SqlParameter("@test_target",req.test_target),
                     };
-                //拼测
-                if (req.order_type.Equals("group"))
-                {
-                    sql = "set xact_abort on " +
-                        "begin tran " +
-                        "declare @CTOID int,@CTOS datetime,@CTOE datetime,@CTOStatus varchar(16),@StartTimeResult datetime,@EndTimeResult datetime" +
-                        "SELECT @CTOID=FIRST(id),@CTOS=FIRST(start_time),@CTOE=FIRST(end_time),@CTOStatus=FIRST(status) " +
-                        "FROM ChamberTimeOrder WHERE status='waitting' " +
-                            "AND machine_id=@machine_id " +
-                            "AND remain_count>=@test_count " +
-                            "AND ((@end_time>start_time AND @end_time<end_time) " +
-                            "OR (@start_time>start_time AND @start_time<end_time) " +
-                            "OR (@start_time<start_time AND @end_time>end_time)); " +
-                        "if (@CTOID not null) " +
-                            "begin " +
-                            "if(@start_time<@CTOS AND @end_time>@CTOS AND @end_time<@CTOE) " +
-                            "begin @StartTimeResult=@CTOS,@EndTimeResult=@start_time end " +
-                            "if(@start_time>@CTOS AND @end_time<@CTOE) " +
-                            "begin @StartTimeResult=@start_time,@EndTimeResult=@end_time end " +
-                            "if(@start_time>@CTOS AND @start_time<@CTOE AND @end_time>@CTOE)" +
-                            "begin @StartTimeResult=@start_time,@EndTimeResult=@CTOE end " +
-                            "if(@start_time<@CTOS AND @end_time<@CTOE AND @end_time>@CTOS)" +
-                            "begin @StartTimeResult=@CTOS,@EndTimeResult=@end_time end " +
-                            "if(@start_time<@CTOS AND @end_time>@CTOE)" +
-                            "begin @StartTimeResult=@CTOS,@EndTimeResult=@CTOE end " +
-                            "UPDATE ChamberTimeOrder SET start_time=@StartTimeResult,end_time=@EndTimeResult,remain_count=remain_count-@test_count WHERER id=@CTOID;" +
-                            "INSERT INTO ChamberOrder (machine_id,staff_num,start_time,end_time,order_time,customer_type," +
-                            "test_machine_type,test_stage,test_item,test_count,@test_targert,status,time_order_id) " +
-                            "VALUES (@machine_id,@staff_num,@StartTimeResult,@EndTimeResult,@order_time,@customer_type," +
-                            "@test_machine_type,@test_stage,@test_item,@test_count,@test_targert,@CTOStatus,@CTOID) " +
-                            "end" +
-                         "commit tarn";
-                    if (SqlHelper.ExecteNonQueryText(sql, param) != 2)
+                    var rows = SqlHelper.ExecteNonQueryProducts("GroupOrderChamber", param);
+                    if (rows == -1)
                     {
-                        res.errorMessage = "设备忙碌";
+                        res.errorMessage = "预约失败";
                     }
-                    res.success = "true";
+                    else
+                    {
+                        res.success = "true";
+                    }
+
                 }
                 // 预定
                 if (req.order_type.Equals("new"))
                 {
-                    sql = "set xact_abort on " +
-                        "begin tran " +
-                        "declare @CTOID int,@Capacity int,@TimeOrderId int" +
-                        "SELECT @CTOID=FIRST(id) " +
-                        "FROM ChamberTimeOrder WHERE status!='over' " +
-                            "AND machine_id=@machine_id " +
-                            "AND ((@end_time > start_time AND @end_time < end_time) " +
-                            "OR (@start_time > start_time AND @start_time < end_time) " +
-                            "OR (@start_time < start_time AND @end_time > end_time)); " +
-                        "SELECT @Capacity=FIRST(capacity) FROM Chamber WHERE id=@machine_id; " +
-                        "if (@CTOID is null) " +
-                            "INSERT INTO ChamberTimeOrder (start_time,end_time,machine_id,reamin_count,status) " +
-                            "VALUSE (@start_time,@end_time,@machine_id,@Capacity,'waitting');" +
-                            "SELECT @TimeOrderId=FIRST(id) FROM ChamberTimeOrder WHERE start_time=@start_time AND end_time=@end_time AND machine_id=@machine_id; " +
-                            "INSERT INTO ChamberOrder (machine_id,staff_num,start_time,end_time,order_time,customer_type," +
-                            "test_machine_type,test_stage,test_item,test_count,@test_targert,status,time_order_id) " +
-                            "VALUES (@machine_id,@staff_num,@StartTimeResult,@EndTimeResult,@order_time,@customer_type," +
-                            "@test_machine_type,@test_stage,@test_item,@test_count,@test_targert,'waitting',@TimeOrderId); " +
-                            "end" +
-                         "commit tarn";
-
-                    if (SqlHelper.ExecteNonQueryText(sql, param) != 2)
+                    param = new SqlParameter[] {
+                        new SqlParameter("@machine_id",req.id),
+                        new SqlParameter("@start_time",Convert.ToDateTime(req.start_time).AddHours(0-run_time)),
+                        new SqlParameter("@end_time",Convert.ToDateTime(req.end_time).AddHours(run_time)),
+                        new SqlParameter("@staff_num",tokenCheckResult.userNum),
+                        new SqlParameter("@order_time",DateTime.Now),
+                        new SqlParameter("@customer_type",req.customer),
+                        new SqlParameter("@test_machine_type",req.test_type),
+                        new SqlParameter("@test_stage",req.test_stage),
+                        new SqlParameter("@test_item",req.test_program),
+                        new SqlParameter("@test_count",req.test_count),
+                        new SqlParameter("@test_target",req.test_target),
+                    };
+                    var rows = SqlHelper.ExecteNonQueryProducts("NewOrderChamber", param);
+                    if (rows == -1)
                     {
-                        res.errorMessage = "设备忙碌";
+                        res.errorMessage = "预约失败";
                     }
-                    res.success = "true";
+                    else
+                    {
+                        res.success = "true";
+                    }
                 }
             }
             catch (Exception e)
@@ -592,7 +496,7 @@ namespace paems.Controllers
             return res;
         }
 
-        // 指定设备预约数据查询
+        // 指定UnChamber设备预约数据查询
         [HttpPost]
         [Route("api/ae/unchamber/schedule")]
         public UnChamberScheduleRes Post([FromBody] UnChamberScheduleReq req)
@@ -640,6 +544,54 @@ namespace paems.Controllers
             catch (Exception e)
             {
                 res.errorMessage = "指定设备预约数据查询";
+                _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
+            }
+            return res;
+        }
+
+        // 指定UnChamber设备预约数据查询
+        [HttpPost]
+        [Route("api/ae/chamber/schedule")]
+        public ChamberScheduleRes Post([FromBody] ChamberScheduleReq req)
+        {
+            ChamberScheduleRes res = new ChamberScheduleRes();
+            try
+            {
+                res.success = "false";
+                TokenCheckResult tokenCheckResult = TokenHelper.CheckToken(req.token);
+                if (!tokenCheckResult.isValid)
+                {
+                    res.errorMessage = "身份验证失败";
+                    return res;
+                }
+
+                SqlParameter[] param;
+                param = new SqlParameter[] {
+                    new SqlParameter("@id", req.id),
+                };
+                string sql = "SELECT * FROM ChamberTimeOrder WHERE status='waitting' AND machine_id=@id;";
+                var DataSource = SqlHelper.GetTableText(sql, param);
+                res.data = new ChamberScheduleData();
+                ChamberScheduleResult[] results = new ChamberScheduleResult[DataSource[0].Rows.Count];
+                int i = 0;
+                foreach (DataTable table in DataSource)
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        ChamberScheduleResult result = new ChamberScheduleResult();
+                        result.remain_count = Convert.ToString(row["remain_count"]);
+                        result.start_time = Convert.ToString(row["start_time"]);
+                        result.end_time = Convert.ToString(row["end_time"]);
+                        results[i] = result;
+                        i++;
+                    }
+                }
+                res.data.result = results;
+                res.success = "true";
+            }
+            catch (Exception e)
+            {
+                res.errorMessage = "指定Chamber设备预约数据查询";
                 _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
             }
             return res;

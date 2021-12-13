@@ -150,6 +150,34 @@ namespace paems.Interfaces
         public string start_time { get; set; }
         public string end_time { get; set; }
     }
+
+    public class ChamberScheduleReq
+    {
+        public string token { get; set; }
+        public decimal id { get; set; }
+
+    }
+    public class ChamberScheduleRes
+    {
+        public string success { get; set; }
+        public ChamberScheduleData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class ChamberScheduleData
+    {
+        public ChamberScheduleResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class ChamberScheduleResult
+    {
+        public string remain_count { get; set; }
+        public string start_time { get; set; }
+        public string end_time { get; set; }
+    }
+
     public class UnChamberQueryDeviceNameReq
     {
         public string token { get; set; }
