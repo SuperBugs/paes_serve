@@ -203,6 +203,31 @@ namespace paems.Interfaces
 
     }
 
+    public class ChamberQueryDeviceNameReq
+    {
+        public string token { get; set; }
+        public string query { get; set; }
+    }
+    public class ChamberQueryDeviceNameRes
+    {
+        public string success { get; set; }
+        public ChamberQueryDeviceNameData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class ChamberQueryDeviceNameData
+    {
+        public ChamberQueryDeviceNameResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class ChamberQueryDeviceNameResult
+    {
+        public string name { get; set; }
+
+    }
+
     public class UnChamberQueryLabNameReq
     {
         public string token { get; set; }

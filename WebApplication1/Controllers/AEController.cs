@@ -147,7 +147,7 @@ namespace paems.Controllers
 
         private string getScaleStatus(decimal machine_id, string start_time, string end_time)
         {
-            string sql = "SELECT COUNT(id) FROM UnChamberOrder WHERE status!='over' AND machine_id=@machine_id AND " +
+            string sql = "SELECT COUNT(id) FROM UnChamberOrder WHERE status!='over' AND status!='cancel' AND machine_id=@machine_id AND " +
                 "((start_time<@start_time AND end_time>@start_time) " +
                 "OR (start_time<@end_time AND end_time>@end_time) " +
                 "OR (start_time>@start_time AND end_time<@end_time))";
@@ -201,6 +201,7 @@ namespace paems.Controllers
                         run_time = Convert.ToDouble(row["test_time"]);
                     }
                 }
+
                 sql = "SELECT TOP(@pageSize) * FROM Chamber WHERE type=@machine_type " +
                     " AND id NOT IN" +
                     "(SELECT TOP(@beforeSize) id FROM Chamber WHERE type=@machine_type " +
@@ -269,7 +270,7 @@ namespace paems.Controllers
                             continue;
                         }
                         // 存在则为忙碌，不存在则为空闲
-                        sql = "SELECT * FROM ChamberTimeOrder WHERE status!='over' " +
+                        sql = "SELECT * FROM ChamberTimeOrder WHERE status!='over' AND status!='cancel' AND status!='cancel' " +
                             "AND machine_id=@machine_id " +
                             "AND ((@end_time > start_time AND @end_time < end_time)" +
                             "OR (@start_time > start_time AND @start_time < end_time)" +
@@ -359,7 +360,7 @@ namespace paems.Controllers
                     return res;
                 }
                 string sql = "if not " +
-                    "exists(SELECT * FROM UnChamberOrder WHERE status!='over' AND id=@machine_id AND " +
+                    "exists(SELECT * FROM UnChamberOrder WHERE status!='over' AND status!='cancel' AND id=@machine_id AND " +
                     "((start_time<@start_time AND end_time>@start_time) " +
                     "OR (start_time<@end_time AND end_time<@end_time) " +
                     "OR (start_time>@start_time AND end_time<@end_time)))" +
@@ -627,6 +628,60 @@ namespace paems.Controllers
                     foreach (DataRow row in table.Rows)
                     {
                         UnChamberQueryDeviceNameResult result = new UnChamberQueryDeviceNameResult();
+                        result.name = Convert.ToString(row["name"]);
+                        results[i] = result;
+                        i++;
+                    }
+                }
+                res.data.result = results;
+                if (i <= 9)
+                {
+                    res.data.total = i;
+                }
+                else
+                {
+                    res.data.total = 10;
+                }
+                res.success = "true";
+            }
+            catch (Exception e)
+            {
+                res.errorMessage = "查询设备名称接口异常";
+                _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
+            }
+            return res;
+        }
+
+        [HttpPost]
+        [Route("api/ae/chamber/query_device_name")]
+        public ChamberQueryDeviceNameRes Post([FromBody] ChamberQueryDeviceNameReq req)
+        {
+            ChamberQueryDeviceNameRes res = new ChamberQueryDeviceNameRes();
+            try
+            {
+                res.success = "false";
+                TokenCheckResult tokenCheckResult = TokenHelper.CheckToken(req.token);
+                if (!tokenCheckResult.isValid)
+                {
+                    res.errorMessage = "身份验证失败";
+                    return res;
+                }
+                string sql;
+                SqlParameter[] param;
+
+                sql = "SELECT DISTINCT TOP(10) name FROM Chamber WHERE name LIKE @name;";
+                param = new SqlParameter[] {
+                    new SqlParameter("@name","%"+req.query+"%"),
+                };
+                var DataSource = SqlHelper.GetTableText(sql, param);
+                res.data = new ChamberQueryDeviceNameData();
+                ChamberQueryDeviceNameResult[] results = new ChamberQueryDeviceNameResult[DataSource[0].Rows.Count];
+                int i = 0;
+                foreach (DataTable table in DataSource)
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        ChamberQueryDeviceNameResult result = new ChamberQueryDeviceNameResult();
                         result.name = Convert.ToString(row["name"]);
                         results[i] = result;
                         i++;
