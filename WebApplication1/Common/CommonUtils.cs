@@ -44,6 +44,31 @@ namespace paems.Common
             return Convert.ToBase64String(s);
         }
 
+        public static bool IsDate(string strDate)
+        {
+            try
+            {
+                DateTime.Parse(strDate);  //不是字符串时会出现异常
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static object DateNull(string obj)
+        {
+            if (!IsDate(obj))
+            {
+                return DBNull.Value;
+            }
+            else
+            {
+                return obj;
+            }
+        }
+
         /// <summary>
         /// 16位MD5加密
         /// </summary>
@@ -130,7 +155,7 @@ namespace paems.Common
                 // debug环境nlog.config路径
                 return NLog.Web.NLogBuilder.ConfigureNLog("nlog.config").GetCurrentClassLogger();
             }
-            
+
         }
 
     }

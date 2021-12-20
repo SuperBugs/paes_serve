@@ -778,9 +778,9 @@ namespace paems.Controllers
                 string sql;
                 SqlParameter[] param;
 
-                sql = "SELECT DISTINCT test_item FROM UnChamberTestItem WHERE machine_type=@machine_name;";
+                sql = "SELECT DISTINCT test_item FROM UnChamberTestItem WHERE machine_type=@machine_type;";
                 param = new SqlParameter[] {
-                    new SqlParameter("@machine_name",req.query),
+                    new SqlParameter("@machine_type",req.query),
                 };
                 var testData = SqlHelper.GetTableText(sql, param);
                 res.data = new UnChamberQueryProjectNameData();
