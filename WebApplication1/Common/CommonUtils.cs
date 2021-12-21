@@ -69,6 +69,18 @@ namespace paems.Common
             }
         }
 
+        public static object StringNull(string obj)
+        {
+            if (obj == null)
+            {
+                return DBNull.Value;
+            }
+            else
+            {
+                return obj;
+            }
+        }
+
         /// <summary>
         /// 16位MD5加密
         /// </summary>

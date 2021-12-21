@@ -8,7 +8,6 @@ using System.Data;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
-using paems.Common;
 
 namespace paems.Crontab
 {
@@ -57,9 +56,8 @@ namespace paems.Crontab
                                 new SqlParameter("@id", Convert.ToDecimal(row["id"]))
                             }));
 
-                            updateSql = "UPDATE UnChamber SET status='free',lend_time=null,return_time=null,return_staff=@return_staff WHERE id=@id;";
+                            updateSql = "UPDATE UnChamber SET status='free',lend_time=null,return_time=null WHERE id=@id;";
                             sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] {
-                                new SqlParameter("@return_staff", Convert.ToString(row["staff_num"])),
                                 new SqlParameter("@id", Convert.ToDecimal(row["machine_id"]))
                             }));
                         }
@@ -71,8 +69,9 @@ namespace paems.Crontab
                             sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] {
                                 new SqlParameter("@id", Convert.ToDecimal(row["id"])) }));
 
-                            updateSql = "UPDATE UnChamber SET status='running',lend_time=@lend_time,return_time=@return_time WHERE id=@id;";
+                            updateSql = "UPDATE UnChamber SET status='running',lend_time=@lend_time,return_time=@return_time,return_staff=@return_staff WHERE id=@id;";
                             sqlStrList.Add(new KeyValuePair<string, SqlParameter[]>(updateSql, new SqlParameter[] {
+                                new SqlParameter("@return_staff", Convert.ToString(row["staff_num"])),
                                 new SqlParameter("@lend_time", Convert.ToDateTime(row["start_time"])),
                                 new SqlParameter("@return_time", Convert.ToDateTime(row["end_time"])),
                                 new SqlParameter("@id", Convert.ToDecimal(row["machine_id"]))

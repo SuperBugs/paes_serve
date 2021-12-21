@@ -32,8 +32,8 @@ namespace paems.Interfaces
         public string type { get; set; }
         public string test_type { get; set; }
         public string status { get; set; }
-        public string lend_time { get; set; }
-        public string return_time { get; set; }
+        public string start_time { get; set; }
+        public string end_time { get; set; }
         public string lab { get; set; }
         public string return_staff { get; set; }
     }
@@ -102,7 +102,7 @@ namespace paems.Interfaces
         public string success { get; set; }
         public string errorMessage { get; set; }
     }
-    public class EMChamberUnChangeReq
+    public class EMUnChamberChangeReq
     {
 
         public string token { get; set; }
@@ -112,8 +112,8 @@ namespace paems.Interfaces
         public string type { get; set; }
         public string test_type { get; set; }
         public string status { get; set; }
-        public string lend_time { get; set; }
-        public string return_time { get; set; }
+        public string start_time { get; set; }
+        public string end_time { get; set; }
         public string lab { get; set; }
         public string return_staff { get; set; }
     }
@@ -195,10 +195,60 @@ namespace paems.Interfaces
         public string type { get; set; }
         public string test_type { get; set; }
         public string status { get; set; }
-        public string lend_time { get; set; }
-        public string return_time { get; set; }
+        public string start_time { get; set; }
+        public string end_time { get; set; }
         public string lab { get; set; }
         public string return_staff { get; set; }
+
+    }
+
+    public class QueryChambeMachineTypeReq
+    {
+        public string token { get; set; }
+        public string query { get; set; }
+    }
+    public class QueryChamberMachineTypeRes
+    {
+        public string success { get; set; }
+        public QueryChamberMachineTypeData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class QueryChamberMachineTypeData
+    {
+        public QueryChamberMachineTypeResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class QueryChamberMachineTypeResult
+    {
+        public string name { get; set; }
+
+    }
+
+    public class QueryUnChamberMachineTypeReq
+    {
+        public string token { get; set; }
+        public string query { get; set; }
+    }
+    public class QueryUnChamberMachineTypeRes
+    {
+        public string success { get; set; }
+        public QueryUnChamberMachineTypeData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class QueryUnChamberMachineTypeData
+    {
+        public QueryUnChamberMachineTypeResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class QueryUnChamberMachineTypeResult
+    {
+        public string name { get; set; }
 
     }
 }

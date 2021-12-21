@@ -382,7 +382,7 @@ namespace paems.Controllers
                     new SqlParameter("@test_stage",req.test_stage),
                     new SqlParameter("@test_item",req.test_program),
                     new SqlParameter("@test_count",req.test_count),
-                    new SqlParameter("@test_target",req.test_target),
+                    new SqlParameter("@test_target",CommonUtils.StringNull(req.test_target)),
                 };
 
                 var DataSource = SqlHelper.ExecteNonQueryText(sql, param);
@@ -449,7 +449,7 @@ namespace paems.Controllers
                         new SqlParameter("@test_stage",req.test_stage),
                         new SqlParameter("@test_item",req.test_program),
                         new SqlParameter("@test_count",req.test_count),
-                        new SqlParameter("@test_target",req.test_target),
+                        new SqlParameter("@test_target",CommonUtils.StringNull(req.test_target)),
                     };
                     var rows = SqlHelper.ExecteNonQueryProducts("GroupOrderChamber", param);
                     if (rows == -1)
@@ -476,7 +476,7 @@ namespace paems.Controllers
                         new SqlParameter("@test_stage",req.test_stage),
                         new SqlParameter("@test_item",req.test_program),
                         new SqlParameter("@test_count",req.test_count),
-                        new SqlParameter("@test_target",req.test_target),
+                        new SqlParameter("@test_target",CommonUtils.StringNull(req.test_target)),
                     };
                     var rows = SqlHelper.ExecteNonQueryProducts("NewOrderChamber", param);
                     if (rows == -1)
