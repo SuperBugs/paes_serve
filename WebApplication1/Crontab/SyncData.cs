@@ -13,7 +13,7 @@ namespace paems.Crontab
 {
     public class SyncData : Job
     {
-        // 非chamber设备更新
+        // 非chamber设备更新 1分钟刷新一次
         [Invoke(Begin = "2021-12-2 00:00", Interval = 1000 * 60)]
         public void Hour(IServiceProvider service)
         {
@@ -23,7 +23,7 @@ namespace paems.Crontab
                 设备非维修状态下：
                 忙碌->空闲，订单status为running且结束时间小于当前时间，则设置status为over，
                 设备状态设置为空闲，设备开始时间和结束时间设置为空，设备status设置为free时间置空
-                预约中->忙碌，订单status为waitting且开始时间-1分钟大于当前时间，则设置status为running
+                预约中->忙碌，订单status为waitting且开始时间-1分钟小于当前时间，则设置status为running
                 设备状态设置为忙碌，设备开始/结束时间设置为订单开始/结束时间，设备status设置为running，
                 更新前使用人员
                 */
@@ -88,18 +88,32 @@ namespace paems.Crontab
             }
         }
 
-        // Chamber设备更新10分钟轮
-        [Invoke(Begin = "2021-12-2 00:05", Interval = 1000 * 60)]
+        // Chamber定时处理
+        [Invoke(Begin = "2021-12-2 00:05", Interval = 1000 * 60 * 1)]
         public void Chamber(IServiceProvider service)
         {
             try
             {
                 /*chamber
-                chamber设备非维修状态
-                忙碌->空闲，主订单status为running且结束时间小于当前时间，则设置所有订单status为over，
-                设备状态设置为空闲，设备开始时间和结束时间设置为空，设备status设置为free时间置空
-                预约中->忙碌，主订单status=waitting且开始时间-1分钟大于当前时间，则设置status为running
-                设备状态设置为忙碌，设备开始/结束时间设置为主订单开始/结束时间，设备status设置为running
+                Note:主订单start_time\end_time为预约时间 客户订单start_time\end_time为正式启动和结束时间 提前一个小时邮件通知客户
+                
+                1、拼单满->忙碌，当主订单status=waitting，remain_count为0，且开始时间小于(当前时间-1h)。
+                设置主订单表，status为running。
+                设置关联客户订单表，开始时间为主订单开始时间，结束时间为主订单开始时间加测试所需时间(通过machine_id去ChamberTestItem中取值)，status为running，发送提醒邮件。
+                设置设备表，开始时间同客户订单表，status为running。
+                2、拼单不满->忙碌，当主订单status=waitting，remain_count不为0，结束时间小于(当前时间-1h)。
+                设置主订单表，status为running。
+                设置关联客户订单表，开始时间为主订单结束时间，结束时间为主订单结束时间加测试所需时间(通过machine_id去ChamberTestItem中取值)，status为running，发送提醒邮件。
+                设置设备表，开始时间同客户订单表，status为running。
+                3、忙碌->空闲，主订单status=running。
+                    3.1当remain_count为0，当前时间大于主订单开始时间加测试所需时间。
+                    设置主订单表，status为over
+                    设置关联客户订单表，status为over
+                    设置设备表，status为free
+                    3.2当remain_count不为0，当前时间大于主订单结束时间加测试所需时间。
+                    设置主订单表，status为over
+                    设置关联客户订单表，status为over
+                    设置设备表，status为free
                 */
                 string sql;
                 SqlParameter[] param;

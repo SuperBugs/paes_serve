@@ -212,7 +212,6 @@ namespace paems.Controllers
                     new SqlParameter("@machine_type", machine_type),
                 };
                 var DataSource = SqlHelper.GetTableText(sql, param);
-                // CommonUtils.printDataTableCollection(DataSource);
                 res.data = new ChamberSearchData();
                 ChamberSearchResult[] results = new ChamberSearchResult[DataSource[0].Rows.Count];
                 int i = 0;
@@ -239,13 +238,11 @@ namespace paems.Controllers
                         // 查询符合拼测的订单
                         sql = "SELECT * FROM ChamberTimeOrder WHERE status='waitting' " +
                             "AND machine_id=@machine_id " +
-                            "AND remain_count>=@test_count " +
                             "AND ((@end_time > start_time AND @end_time < end_time)" +
                             "OR (@start_time > start_time AND @start_time < end_time)" +
                             "OR (@start_time < start_time AND @end_time > end_time))";
                         param = new SqlParameter[] {
                             new SqlParameter("@machine_id", Convert.ToString(row["id"])),
-                            new SqlParameter("@test_count", req.test_count),
                             new SqlParameter("@start_time", req.date[0]),
                             new SqlParameter("@end_time", req.date[1]),
                         };
@@ -255,7 +252,14 @@ namespace paems.Controllers
                         {
                             foreach (DataRow r in t.Rows)
                             {
-                                result.status = "waitting";
+                                if (Convert.ToDecimal(r["remain_count"]) >= req.test_count)
+                                {
+                                    result.status = "waitting";
+                                }
+                                else
+                                {
+                                    result.status = "running";
+                                }
                                 result.lend_time = Convert.ToString(r["start_time"]);
                                 result.return_time = Convert.ToString(r["end_time"]);
                                 result.use_count = Convert.ToString(Convert.ToDecimal(row["capacity"]) - Convert.ToDecimal(r["remain_count"]));
@@ -265,12 +269,12 @@ namespace paems.Controllers
                                 break;
                             }
                         }
-                        if (result.status.Equals("waitting"))
+                        if (result.status.Equals("waitting")|| result.status.Equals("running"))
                         {
                             continue;
                         }
                         // 存在则为忙碌，不存在则为空闲
-                        sql = "SELECT * FROM ChamberTimeOrder WHERE status!='over' AND status!='cancel' AND status!='cancel' " +
+                        sql = "SELECT * FROM ChamberTimeOrder WHERE status!='over' AND status!='cancel'" +
                             "AND machine_id=@machine_id " +
                             "AND ((@end_time > start_time AND @end_time < end_time)" +
                             "OR (@start_time > start_time AND @start_time < end_time)" +
@@ -317,7 +321,7 @@ namespace paems.Controllers
                             result.lend_time = "";
                             result.return_time = "";
                             result.use_count = "0";
-                            result.remain_count = "剩余容量不够";
+                            result.remain_count = "容量不够";
                             results[i] = result;
                             i++;
                         }
@@ -519,8 +523,8 @@ namespace paems.Controllers
                 };
                 string sql = "SELECT UnChamberOrder.staff_num,UnChamberOrder.start_time,UnChamberOrder.end_time," +
                     "CompanyUser.name,CompanyUser.num,CompanyUser.phone FROM UnChamberOrder INNER JOIN CompanyUser" +
-                    " ON UnChamberOrder.staff_num=CompanyUser.num AND UnChamberOrder.status='waitting'" +
-                    " WHERE UnChamberOrder.machine_id=@id AND UnChamberOrder.status='waitting';";
+                    " ON UnChamberOrder.staff_num=CompanyUser.num AND (UnChamberOrder.status='waitting' OR UnChamberOrder.status='running')" +
+                    " WHERE UnChamberOrder.machine_id=@id;";
                 var DataSource = SqlHelper.GetTableText(sql, param);
                 res.data = new UnChamberScheduleData();
                 UnChamberScheduleResult[] results = new UnChamberScheduleResult[DataSource[0].Rows.Count];

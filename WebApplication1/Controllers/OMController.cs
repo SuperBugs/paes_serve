@@ -173,7 +173,7 @@ namespace paems.Controllers
                         i++;
                     }
                 }
-                sql = "SELECT COUNT(id) FROM Chamber WHERE 1=1" + sqlFilter;
+                sql = "SELECT COUNT(id) FROM ChamberOrder WHERE 1=1" + sqlFilter;
                 param = new SqlParameter[] {
                     new SqlParameter("@id", req.filters[0]),
                     new SqlParameter("@machine_id", req.filters[1]),
@@ -269,7 +269,7 @@ namespace paems.Controllers
                         i++;
                     }
                 }
-                sql = "SELECT COUNT(id) FROM UnChamber WHERE 1=1" + sqlFilter;
+                sql = "SELECT COUNT(id) FROM UnChamberOrder WHERE 1=1" + sqlFilter;
                 param = new SqlParameter[] {
                     new SqlParameter("@id", req.filters[0]),
                     new SqlParameter("@machine_id", req.filters[1]),

@@ -121,7 +121,7 @@ namespace paems.Controllers
                         res.name = Convert.ToString(row["name"]);
                         res.email = Convert.ToString(row["email"]);
                         res.userid = Convert.ToString(row["num"]);
-                        if (Convert.ToString(row["role"]).Equals("User"))
+                        if (Convert.ToString(row["role"]).Equals("user"))
                         {
                             res.access = "user";
                         }
