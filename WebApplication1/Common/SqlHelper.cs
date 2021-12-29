@@ -5,6 +5,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.IO;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace paems.Common
 {
@@ -447,7 +448,7 @@ namespace paems.Common
             SqlConnection conn = new SqlConnection(connectionString);
             try
             {
-                SqlBulkCopy bulkCopy = new SqlBulkCopy(conn,SqlBulkCopyOptions.UseInternalTransaction,null);
+                SqlBulkCopy bulkCopy = new SqlBulkCopy(conn, SqlBulkCopyOptions.UseInternalTransaction, null);
                 bulkCopy.DestinationTableName = tableName;
                 bulkCopy.BatchSize = dt.Rows.Count;
                 conn.Open();
@@ -470,38 +471,42 @@ namespace paems.Common
         /// </summary>
         /// <param name="sqlStrList"></param>
         /// <returns></returns>
-        public static int ExecuteSqlTran(List<KeyValuePair<string, SqlParameter[]>> sqlStrList)
+        public static async Task<int> ExecuteSqlTran(List<KeyValuePair<string, SqlParameter[]>> sqlStrList)
         {
-            using (SqlConnection conn = new SqlConnection(connectionString))
+            return await Task.Run(() =>
             {
-                conn.Open();
-                using (SqlCommand cmd = new SqlCommand())
+                using (SqlConnection conn = new SqlConnection(connectionString))
                 {
-                    using (SqlTransaction tran = conn.BeginTransaction())
+                    conn.Open();
+                    using (SqlCommand cmd = new SqlCommand())
                     {
-                        try
+                        using (SqlTransaction tran = conn.BeginTransaction())
                         {
-                            cmd.Connection = conn;
-                            cmd.CommandType = CommandType.Text;
-                            cmd.Transaction = tran;
-                            int count = 0;
-                            foreach (var item in sqlStrList)
+                            try
                             {
-                                cmd.CommandText = item.Key;
-                                cmd.Parameters.Clear();
-                                cmd.Parameters.AddRange(item.Value);
-                                count += cmd.ExecuteNonQuery();
+                                cmd.Connection = conn;
+                                cmd.CommandType = CommandType.Text;
+                                cmd.Transaction = tran;
+                                int count = 0;
+                                foreach (var item in sqlStrList)
+                                {
+                                    cmd.CommandText = item.Key;
+                                    cmd.Parameters.Clear();
+                                    cmd.Parameters.AddRange(item.Value);
+                                    count += cmd.ExecuteNonQuery();
+                                }
+                                tran.Commit();
+                                return count;
                             }
-                            tran.Commit();
-                            return count;
-                        }
-                        finally
-                        {
-                            conn.Close();
+                            finally
+                            {
+                                conn.Close();
+                            }
                         }
                     }
                 }
-            }
+            });
+
         }
     }
 }

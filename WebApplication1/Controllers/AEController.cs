@@ -89,6 +89,11 @@ namespace paems.Controllers
                         {
                             result.status = getScaleStatus(Convert.ToDecimal(row["id"]), req.date[0], req.date[1]);
                         }
+                        if (result.status.Equals("error") || result.status.Equals("free"))
+                        {
+                            result.lend_time = null;
+                            result.return_time = null;
+                        }
                         if (req.filters.Length == 3 && req.filters[0].Equals("") &&
                             req.filters[1].Equals("") && req.filters[2].Equals("") || req.filters[0].Equals("all"))
                         {
@@ -238,6 +243,7 @@ namespace paems.Controllers
                         // 查询符合拼测的订单
                         sql = "SELECT * FROM ChamberTimeOrder WHERE status='waitting' " +
                             "AND machine_id=@machine_id " +
+                            "AND test_item=@test_item " +
                             "AND ((@end_time > start_time AND @end_time < end_time)" +
                             "OR (@start_time > start_time AND @start_time < end_time)" +
                             "OR (@start_time < start_time AND @end_time > end_time))";
@@ -245,6 +251,7 @@ namespace paems.Controllers
                             new SqlParameter("@machine_id", Convert.ToString(row["id"])),
                             new SqlParameter("@start_time", req.date[0]),
                             new SqlParameter("@end_time", req.date[1]),
+                            new SqlParameter("@test_item",req.test_project),
                         };
                         var order = SqlHelper.GetTableText(sql, param);
 
@@ -269,7 +276,7 @@ namespace paems.Controllers
                                 break;
                             }
                         }
-                        if (result.status.Equals("waitting")|| result.status.Equals("running"))
+                        if (result.status.Equals("waitting") || result.status.Equals("running"))
                         {
                             continue;
                         }
@@ -281,8 +288,8 @@ namespace paems.Controllers
                             "OR (@start_time < start_time AND @end_time > end_time))";
                         param = new SqlParameter[] {
                             new SqlParameter("@machine_id", Convert.ToString(row["id"])),
-                            new SqlParameter("@end_time", Convert.ToDateTime(req.date[0]).AddHours(0-run_time)),
-                            new SqlParameter("@start_time", Convert.ToDateTime(req.date[1]).AddHours(run_time)),
+                            new SqlParameter("@start_time", Convert.ToDateTime(req.date[0])),
+                            new SqlParameter("@end_time", Convert.ToDateTime(req.date[1])),
                         };
 
                         var orders = SqlHelper.GetTableText(sql, param);
@@ -471,8 +478,8 @@ namespace paems.Controllers
                 {
                     param = new SqlParameter[] {
                         new SqlParameter("@machine_id",req.id),
-                        new SqlParameter("@start_time",Convert.ToDateTime(req.start_time).AddHours(0-run_time)),
-                        new SqlParameter("@end_time",Convert.ToDateTime(req.end_time).AddHours(run_time)),
+                        new SqlParameter("@start_time",Convert.ToDateTime(req.start_time)),
+                        new SqlParameter("@end_time",Convert.ToDateTime(req.end_time)),
                         new SqlParameter("@staff_num",tokenCheckResult.userNum),
                         new SqlParameter("@order_time",DateTime.Now),
                         new SqlParameter("@customer_type",req.customer),
@@ -900,6 +907,54 @@ namespace paems.Controllers
             catch (Exception e)
             {
                 res.errorMessage = "Chamber设备类型-测试项目表待维护";
+                _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
+            }
+            return res;
+        }
+
+        // 查询chamber类型设备的有测试项目名称
+        [HttpPost]
+        [Route("api/ae/unchamber/query_test_item")]
+        public QueryUnChamberTestItemRes Post([FromBody] QueryUnChamberTestItemReq req)
+        {
+            QueryUnChamberTestItemRes res = new QueryUnChamberTestItemRes();
+            try
+            {
+                res.success = "false";
+                TokenCheckResult tokenCheckResult = TokenHelper.CheckToken(req.token);
+                if (!tokenCheckResult.isValid)
+                {
+                    res.errorMessage = "身份验证失败";
+                    return res;
+                }
+                string sql;
+                SqlParameter[] param;
+
+                sql = "SELECT test_item FROM UnChamberTestItem WHERE test_item LIKE @test_item;";
+                param = new SqlParameter[] {
+                    new SqlParameter("@test_item","%"+req.query+"%"),
+                };
+                var testData = SqlHelper.GetTableText(sql, param);
+                res.data = new QueryUnChamberTestItemData();
+                QueryUnChamberTestItemResult[] results = new QueryUnChamberTestItemResult[testData[0].Rows.Count];
+                int i = 0;
+                foreach (DataTable table in testData)
+                {
+                    foreach (DataRow row in table.Rows)
+                    {
+                        QueryUnChamberTestItemResult result = new QueryUnChamberTestItemResult();
+                        result.name = Convert.ToString(row["test_item"]);
+                        results[i] = result;
+                        i++;
+                    }
+                }
+                res.data.total = i;
+                res.data.result = results;
+                res.success = "true";
+            }
+            catch (Exception e)
+            {
+                res.errorMessage = "UnChamber设备类型-测试项目表待维护";
                 _logger.LogError(e, res.errorMessage + "\r\n" + CommonUtils.JSON(req));
             }
             return res;

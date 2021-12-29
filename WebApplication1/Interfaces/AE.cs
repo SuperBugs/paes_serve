@@ -317,6 +317,31 @@ namespace paems.Interfaces
 
     }
 
+    public class QueryUnChamberTestItemReq
+    {
+        public string token { get; set; }
+        public string query { get; set; }
+    }
+    public class QueryUnChamberTestItemRes
+    {
+        public string success { get; set; }
+        public QueryUnChamberTestItemData data { get; set; }
+        public string errorMessage { get; set; }
+
+    }
+
+    public class QueryUnChamberTestItemData
+    {
+        public QueryUnChamberTestItemResult[] result { get; set; }
+        public decimal total { get; set; }
+
+    }
+    public class QueryUnChamberTestItemResult
+    {
+        public string name { get; set; }
+
+    }
+
     public class ChamberQueryAEReq
     {
         public string token { get; set; }

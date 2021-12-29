@@ -1,14 +1,17 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.ServiceProcess;
 using System.Text;
 using System.Text.Json;
 using System.Text.Unicode;
+using System.Threading.Tasks;
 
 namespace paems.Common
 {
@@ -55,6 +58,47 @@ namespace paems.Common
             {
                 return false;
             }
+        }
+
+        public static async Task<string> HttpPostSend(string url, Object dic, String token = "default")
+        {
+
+            string param = JsonConvert.SerializeObject(dic);
+            System.Net.HttpWebRequest request;
+            request = (System.Net.HttpWebRequest)WebRequest.Create(url);
+            request.Method = "POST";
+            request.Headers["Authorization"] = "Bearer " + token;
+            request.ContentType = "application/json;charset=UTF-8";
+            byte[] payload;
+            payload = System.Text.Encoding.UTF8.GetBytes(param);
+            request.ContentLength = payload.Length;
+            string strValue = "";
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    Stream writer = request.GetRequestStream();
+                    writer.Write(payload, 0, payload.Length);
+                    writer.Close();
+                    System.Net.HttpWebResponse response;
+                    response = (System.Net.HttpWebResponse)request.GetResponse();
+                    System.IO.Stream s;
+                    s = response.GetResponseStream();
+                    string StrDate = "";
+                    StreamReader Reader = new StreamReader(s, Encoding.UTF8);
+                    while ((StrDate = Reader.ReadLine()) != null)
+                    {
+                        strValue += StrDate;
+                    }
+                    return strValue;
+                }
+                catch (Exception e)
+                {
+                    strValue = e.Message;
+                    CommonUtils.Nlog().Error(e, "HttpPostSend执行失败");
+                    return strValue;
+                }
+            });
         }
 
         public static object DateNull(string obj)
@@ -128,7 +172,7 @@ namespace paems.Common
         {
             var options = new JsonSerializerOptions();
             options.Encoder = System.Text.Encodings.Web.JavaScriptEncoder.Create(UnicodeRanges.All);
-            return JsonSerializer.Serialize(ob, options);
+            return System.Text.Json.JsonSerializer.Serialize(ob, options);
         }
 
         public static void RestartRedis()

@@ -28,6 +28,7 @@ namespace paems.Interfaces
     {
         public string success { get; set; }
         public string name { get; set; }
+        public string phone { get; set; }
         public string email { get; set; }
         public string userid { get; set; }
         public string access { get; set; }
